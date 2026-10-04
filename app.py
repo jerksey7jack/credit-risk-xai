@@ -4,6 +4,7 @@ import numpy as np
 import joblib
 import shap
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 
 # -----------------------------------------------------------------------------
 # KONFIGURASI HALAMAN
@@ -14,14 +15,14 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom Styling CSS (Modern Card & Badge UI)
+# Kustomisasi CSS Antarmuka
 st.markdown("""
 <style>
     .metric-container {
         background-color: #ffffff;
         border: 1px solid #e2e8f0;
         border-radius: 12px;
-        padding: 20px;
+        padding: 22px;
         text-align: center;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
         margin-bottom: 20px;
@@ -96,6 +97,7 @@ model, scaler, explainer = load_assets()
 # -----------------------------------------------------------------------------
 presets = {
     "lancar": {
+        'customer_name': 'Budi Santoso',
         'limit_bal': 200000, 'sex': 2, 'education': 1, 'marriage': 2, 'age': 35,
         'pay_0': -1, 'pay_2': -1, 'pay_3': -1, 'pay_4': -1, 'pay_5': -1, 'pay_6': -1,
         'bill_amt1': 25000, 'bill_amt2': 22000, 'bill_amt3': 18000,
@@ -104,6 +106,7 @@ presets = {
         'pay_amt4': 15000, 'pay_amt5': 12000, 'pay_amt6': 8000
     },
     "macet": {
+        'customer_name': 'Rian Hidayat',
         'limit_bal': 30000, 'sex': 1, 'education': 3, 'marriage': 1, 'age': 26,
         'pay_0': 2, 'pay_2': 2, 'pay_3': 1, 'pay_4': 0, 'pay_5': 0, 'pay_6': 0,
         'bill_amt1': 29500, 'bill_amt2': 29000, 'bill_amt3': 28000,
@@ -112,6 +115,7 @@ presets = {
         'pay_amt4': 1000, 'pay_amt5': 500, 'pay_amt6': 500
     },
     "borderline": {
+        'customer_name': 'Siti Rahmawati',
         'limit_bal': 80000, 'sex': 1, 'education': 2, 'marriage': 2, 'age': 29,
         'pay_0': 1, 'pay_2': 0, 'pay_3': 0, 'pay_4': -1, 'pay_5': 0, 'pay_6': 0,
         'bill_amt1': 48000, 'bill_amt2': 42000, 'bill_amt3': 38000,
@@ -126,7 +130,6 @@ def apply_preset(preset_key):
     for k, v in p.items():
         st.session_state[k] = v
 
-# Inisialisasi session state awal jika belum ada
 if 'limit_bal' not in st.session_state:
     apply_preset('lancar')
 
@@ -134,7 +137,7 @@ if 'limit_bal' not in st.session_state:
 # 3. SIDEBAR: PRESET CONTROLS & FORM INPUT
 # -----------------------------------------------------------------------------
 st.sidebar.markdown("### ⚡ Uji Coba Cepat (Preset Profiles)")
-st.sidebar.caption("Klik untuk mengisi data sampel secara instan, atau ketik manual di bawah:")
+st.sidebar.caption("Klik tombol untuk mengisi otomatis, atau edit nilai form di bawah:")
 col_p1, col_p2, col_p3 = st.sidebar.columns(3)
 
 with col_p1:
@@ -150,52 +153,86 @@ with col_p3:
 st.sidebar.markdown("---")
 st.sidebar.header("📋 Borrower Information")
 
-limit_bal = st.sidebar.number_input("Credit Limit (LIMIT_BAL in NT$)", min_value=10000, max_value=1000000, step=10000, key='limit_bal')
-sex = st.sidebar.selectbox("Gender", options=[1, 2], format_func=lambda x: "Male" if x == 1 else "Female", key='sex')
-education = st.sidebar.selectbox("Education Level", options=[1, 2, 3, 4], format_func=lambda x: {1: "Graduate School (S2/S3)", 2: "University (S1)", 3: "High School", 4: "Others"}[x], key='education')
-marriage = st.sidebar.selectbox("Marital Status", options=[1, 2, 3], format_func=lambda x: {1: "Married", 2: "Single", 3: "Others"}[x], key='marriage')
-age = st.sidebar.slider("Age", min_value=18, max_value=80, key='age')
+# Input Nama Nasabah (Metadata UI & Laporan)
+customer_name = st.sidebar.text_input("Nama Lengkap Calon Nasabah", key='customer_name')
+
+limit_bal = st.sidebar.number_input("Batas Kredit (LIMIT_BAL in NT$)", min_value=10000, max_value=1000000, step=10000, key='limit_bal')
+sex = st.sidebar.selectbox("Jenis Kelamin", options=[1, 2], format_func=lambda x: "Laki-laki" if x == 1 else "Perempuan", key='sex')
+education = st.sidebar.selectbox("Tingkat Pendidikan", options=[1, 2, 3, 4], format_func=lambda x: {1: "Pascasarjana (S2/S3)", 2: "Universitas (S1)", 3: "SMA", 4: "Lainnya"}[x], key='education')
+marriage = st.sidebar.selectbox("Status Pernikahan", options=[1, 2, 3], format_func=lambda x: {1: "Menikah", 2: "Lajang", 3: "Lainnya"}[x], key='marriage')
+age = st.sidebar.slider("Usia", min_value=18, max_value=80, key='age')
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("Payment History (6 Months)")
-pay_status_options = {-2: "No consumption", -1: "Paid duly (On time)", 0: "Revolving credit", 1: "Delay 1 month", 2: "Delay 2 months", 3: "Delay 3+ months"}
+st.sidebar.subheader("Riwayat Keterlambatan Bayar (6 Bulan)")
+pay_status_options = {-2: "Tidak ada tagihan", -1: "Tepat waktu (Paid duly)", 0: "Revolving credit", 1: "Telat 1 bulan", 2: "Telat 2 bulan", 3: "Telat 3+ bulan"}
 
 pay_0 = st.sidebar.selectbox("Sept 2005 (PAY_0)", options=list(pay_status_options.keys()), format_func=lambda x: f"{x} ({pay_status_options[x]})", key='pay_0')
-pay_2 = st.sidebar.selectbox("Aug 2005 (PAY_2)", options=list(pay_status_options.keys()), format_func=lambda x: f"{x} ({pay_status_options[x]})", key='pay_2')
+pay_2 = st.sidebar.selectbox("Agt 2005 (PAY_2)", options=list(pay_status_options.keys()), format_func=lambda x: f"{x} ({pay_status_options[x]})", key='pay_2')
 pay_3 = st.sidebar.selectbox("Jul 2005 (PAY_3)", options=list(pay_status_options.keys()), format_func=lambda x: f"{x} ({pay_status_options[x]})", key='pay_3')
 pay_4 = st.sidebar.selectbox("Jun 2005 (PAY_4)", options=list(pay_status_options.keys()), format_func=lambda x: f"{x} ({pay_status_options[x]})", key='pay_4')
-pay_5 = st.sidebar.selectbox("May 2005 (PAY_5)", options=list(pay_status_options.keys()), format_func=lambda x: f"{x} ({pay_status_options[x]})", key='pay_5')
+pay_5 = st.sidebar.selectbox("Mei 2005 (PAY_5)", options=list(pay_status_options.keys()), format_func=lambda x: f"{x} ({pay_status_options[x]})", key='pay_5')
 pay_6 = st.sidebar.selectbox("Apr 2005 (PAY_6)", options=list(pay_status_options.keys()), format_func=lambda x: f"{x} ({pay_status_options[x]})", key='pay_6')
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("Bill Statements (NT$)")
-bill_amt1 = st.sidebar.number_input("Bill Sept 2005 (BILL_AMT1)", key='bill_amt1')
-bill_amt2 = st.sidebar.number_input("Bill Aug 2005 (BILL_AMT2)", key='bill_amt2')
-bill_amt3 = st.sidebar.number_input("Bill Jul 2005 (BILL_AMT3)", key='bill_amt3')
-bill_amt4 = st.sidebar.number_input("Bill Jun 2005 (BILL_AMT4)", key='bill_amt4')
-bill_amt5 = st.sidebar.number_input("Bill May 2005 (BILL_AMT5)", key='bill_amt5')
-bill_amt6 = st.sidebar.number_input("Bill Apr 2005 (BILL_AMT6)", key='bill_amt6')
+st.sidebar.subheader("Riwayat Tagihan Bulanan (NT$)")
+bill_amt1 = st.sidebar.number_input("Tagihan Sept 2005 (BILL_AMT1)", key='bill_amt1')
+bill_amt2 = st.sidebar.number_input("Tagihan Agt 2005 (BILL_AMT2)", key='bill_amt2')
+bill_amt3 = st.sidebar.number_input("Tagihan Jul 2005 (BILL_AMT3)", key='bill_amt3')
+bill_amt4 = st.sidebar.number_input("Tagihan Jun 2005 (BILL_AMT4)", key='bill_amt4')
+bill_amt5 = st.sidebar.number_input("Tagihan Mei 2005 (BILL_AMT5)", key='bill_amt5')
+bill_amt6 = st.sidebar.number_input("Tagihan Apr 2005 (BILL_AMT6)", key='bill_amt6')
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("Previous Payments (NT$)")
-pay_amt1 = st.sidebar.number_input("Paid Sept 2005 (PAY_AMT1)", key='pay_amt1')
-pay_amt2 = st.sidebar.number_input("Paid Aug 2005 (PAY_AMT2)", key='pay_amt2')
-pay_amt3 = st.sidebar.number_input("Paid Jul 2005 (PAY_AMT3)", key='pay_amt3')
-pay_amt4 = st.sidebar.number_input("Paid Jun 2005 (PAY_AMT4)", key='pay_amt4')
-pay_amt5 = st.sidebar.number_input("Paid May 2005 (PAY_AMT5)", key='pay_amt5')
-pay_amt6 = st.sidebar.number_input("Paid Apr 2005 (PAY_AMT6)", key='pay_amt6')
+st.sidebar.subheader("Riwayat Pembayaran Sebelumnya (NT$)")
+pay_amt1 = st.sidebar.number_input("Bayar Sept 2005 (PAY_AMT1)", key='pay_amt1')
+pay_amt2 = st.sidebar.number_input("Bayar Agt 2005 (PAY_AMT2)", key='pay_amt2')
+pay_amt3 = st.sidebar.number_input("Bayar Jul 2005 (PAY_AMT3)", key='pay_amt3')
+pay_amt4 = st.sidebar.number_input("Bayar Jun 2005 (PAY_AMT4)", key='pay_amt4')
+pay_amt5 = st.sidebar.number_input("Bayar Mei 2005 (PAY_AMT5)", key='pay_amt5')
+pay_amt6 = st.sidebar.number_input("Bayar Apr 2005 (PAY_AMT6)", key='pay_amt6')
 
 btn_predict = st.sidebar.button("🔍 Assess Credit Risk", use_container_width=True)
 
 # -----------------------------------------------------------------------------
-# 4. KONTEN UTAMA: DASHBOARD INFERENSI & XAI
+# FUNGSI MEMBUAT PLOTLY RISK GAUGE METER
+# -----------------------------------------------------------------------------
+def plot_risk_gauge(probability):
+    prob_pct = probability * 100
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=prob_pct,
+        number={'suffix': "%", 'font': {'size': 38, 'color': '#0f172a'}},
+        title={'text': "<b>Risk Gauge</b><br><span style='font-size:0.8em;color:gray'>Estimated Default Probability</span>", 'font': {'size': 16}},
+        gauge={
+            'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "#475569"},
+            'bar': {'color': "#0f172a", 'thickness': 0.22},
+            'bgcolor': "white",
+            'borderwidth': 1,
+            'bordercolor': "#cbd5e1",
+            'steps': [
+                {'range': [0, 20], 'color': "#86efac"},   # Low (Hijau)
+                {'range': [20, 50], 'color': "#fde047"},  # Medium (Kuning)
+                {'range': [50, 100], 'color': "#fca5a5"}  # High (Merah)
+            ],
+            'threshold': {
+                'line': {'color': "#dc2626", 'width': 4},
+                'thickness': 0.75,
+                'value': 50.0
+            }
+        }
+    ))
+    fig.update_layout(height=260, margin=dict(l=20, r=20, t=35, b=20))
+    return fig
+
+# -----------------------------------------------------------------------------
+# 4. KONTEN UTAMA: DASHBOARD INFERENSI & VISUALISASI
 # -----------------------------------------------------------------------------
 st.title("🏦 Credit Risk Assessor")
-st.markdown("**Powered by Extreme Gradient Boosting (XGBoost) & Explainable AI (SHAP)**")
-st.caption("Pilih profil sampel di atas bilah samping atau sesuaikan data secara manual, lalu klik tombol **Assess Credit Risk**.")
+st.markdown("**Decision Support System Berbasis Extreme Gradient Boosting (XGBoost) & Explainable AI (SHAP)**")
+st.caption("Gunakan profil uji coba cepat di bilah samping atau sesuaikan data secara manual, lalu klik tombol **Assess Credit Risk**.")
 
 if btn_predict:
-    # Mengumpulkan 23 fitur
+    # 23 Fitur Murni untuk Inferensi Model (Nama nasabah tidak diikutkan agar model objektif)
     feature_dict = {
         'LIMIT_BAL': limit_bal, 'SEX': sex, 'EDUCATION': education, 'MARRIAGE': marriage, 'AGE': age,
         'PAY_0': pay_0, 'PAY_2': pay_2, 'PAY_3': pay_3, 'PAY_4': pay_4, 'PAY_5': pay_5, 'PAY_6': pay_6,
@@ -207,18 +244,20 @@ if btn_predict:
     
     input_df = pd.DataFrame([feature_dict])
     
-    # Scaling numerik via RobustScaler
+    # Penskalaan Fitur Numerik menggunakan RobustScaler
     num_cols = ['LIMIT_BAL'] + [f'BILL_AMT{i}' for i in range(1, 7)] + [f'PAY_AMT{i}' for i in range(1, 7)]
     input_df_scaled = input_df.copy()
     input_df_scaled[num_cols] = scaler.transform(input_df[num_cols])
     
-    # Inferensi Probabilitas
+    # Prediksi Probabilitas
     prob_default = model.predict_proba(input_df_scaled)[0][1]
     
-    # Kalkulasi Metrik Bisnis Peminjam
+    # Kalkulasi Metrik Finansial
     utilization_rate = max(0, min(100, int((bill_amt1 / max(1, limit_bal)) * 100)))
     total_late_months = sum([1 for p in [pay_0, pay_2, pay_3, pay_4, pay_5, pay_6] if p > 0])
     payment_ratio = max(0, min(100, int((pay_amt1 / max(1, bill_amt1)) * 100))) if bill_amt1 > 0 else 100
+    
+    st.subheader(f"📊 Hasil Penilaian Kredit: {customer_name if customer_name else 'Calon Nasabah'}")
     
     # --- SECTION 1: BADGE STATUS & RISK GAUGE ---
     col_card, col_gauge = st.columns([1, 1.2])
@@ -231,36 +270,27 @@ if btn_predict:
         elif prob_default >= 0.35:
             badge_html = '<div class="badge-borderline">⚠️ BORDERLINE RISK</div>'
             prob_color = '#d97706'
-            recom_text = "Rekomendasi: Tinjau Manual (Profil Berisiko Sedang)"
+            recom_text = "Rekomendasi: Tinjau Ulang Manual (Risiko Moderat)"
         else:
             badge_html = '<div class="badge-low">✅ LOW RISK</div>'
             prob_color = '#16a34a'
-            recom_text = "Rekomendasi: Pengajuan Disetujui (Profil Sehat)"
+            recom_text = "Rekomendasi: Pengajuan Disetujui (Profil Likuiditas Baik)"
             
         st.markdown(f"""
         <div class="metric-container">
             {badge_html}
             <div class="prob-number" style="color: {prob_color};">{prob_default * 100:.1f}%</div>
-            <div style="color: #64748b; font-size: 0.95rem; font-weight: 500;">Estimated probability of default within period</div>
+            <div style="color: #64748b; font-size: 0.95rem; font-weight: 500;">Estimated probability of default</div>
             <div style="margin-top: 10px; font-weight: 600; font-size: 0.9rem; color: #334155;">{recom_text}</div>
         </div>
         """, unsafe_allow_html=True)
         
     with col_gauge:
-        st.subheader("📊 Risk Gauge")
-        st.progress(float(prob_default))
-        st.caption(f"Posisi Risiko: **{prob_default * 100:.1f}%** | Ambang Batas Default (*Cut-off*): **50.0%**")
+        st.plotly_chart(plot_risk_gauge(prob_default), use_container_width=True)
         
-        if prob_default >= 0.5:
-            st.error("⚠️ **Peringatan Kredit:** Probabilitas risiko melampaui toleransi perbankan (>50%). Diperlukan penjamin atau agunan tambahan.")
-        elif prob_default >= 0.35:
-            st.warning("⚡ **Perhatian:** Profil debitur berada di zona netral/waspada. Rekomendasikan limit awal yang lebih konservatif.")
-        else:
-            st.success("🛡️ **Aman:** Skor risiko berada jauh di bawah ambang batas kritis. Nasabah memiliki kapasitas pengembalian kredit prima.")
-            
     st.markdown("---")
     
-    # --- SECTION 2: WHY THIS SCORE? (INSIGHTS) ---
+    # --- SECTION 2: WHY THIS SCORE? (EXPLANATION INSIGHTS) ---
     st.subheader("🔍 Why This Score?")
     
     # Analisis Credit Utilization
@@ -268,14 +298,14 @@ if btn_predict:
         st.markdown(f"""
         <div class="why-box-good">
             <b>🟢 Healthy credit utilization</b><br>
-            Hanya <b>{utilization_rate}%</b> dari plafon limit kredit yang digunakan — sinyal kendali likuiditas yang disiplin.
+            Hanya <b>{utilization_rate}%</b> dari plafon batas kredit yang terpakai — sinyal disiplin finansial yang sehat.
         </div>
         """, unsafe_allow_html=True)
     else:
         st.markdown(f"""
         <div class="why-box-bad">
             <b>🔴 High credit utilization</b><br>
-            Penggunaan saldo mencapai <b>{utilization_rate}%</b> dari batas limit — ketergantungan utang yang tinggi meningkatkan beban bunga.
+            Pemakaian saldo mencapai <b>{utilization_rate}%</b> dari plafon kredit — rasio utang tinggi meningkatkan risiko likuiditas.
         </div>
         """, unsafe_allow_html=True)
         
@@ -284,14 +314,14 @@ if btn_predict:
         st.markdown("""
         <div class="why-box-good">
             <b>🟢 Clean payment history</b><br>
-            Tidak ada riwayat keterlambatan bayar yang tercatat selama 6 bulan terakhir — indikator kelayakan pembayaran terbaik.
+            Tidak ada riwayat keterlambatan bayar yang tercatat selama 6 bulan terakhir — indikator likuiditas yang sangat positif.
         </div>
         """, unsafe_allow_html=True)
     else:
         st.markdown(f"""
         <div class="why-box-bad">
             <b>🔴 Payment delay detected</b><br>
-            Tercatat keterlambatan bayar sebanyak <b>{total_late_months} bulan</b> pada 6 bulan terakhir — pendorong dominan naiknya risiko.
+            Tercatat penundaan pembayaran sebanyak <b>{total_late_months} bulan</b> pada 6 bulan terakhir — pendorong dominan naiknya risiko.
         </div>
         """, unsafe_allow_html=True)
 
@@ -307,28 +337,46 @@ if btn_predict:
 
     st.markdown("---")
 
-    # --- SECTION 4: EXPLAINABLE AI WATERFALL PLOT ---
-    st.subheader("📈 Local Feature Attribution (Explainable AI - SHAP)")
-    st.write("Dekomposisi atribusi nilai Shapley: Balok **merah (+)** mendorong kenaikan risiko, balok **biru (-)** meredam risiko calon debitur ini.")
+    # --- SECTION 4: EXPLAINABLE AI TABS (LOCAL WATERFALL VS GLOBAL BAR CHART) ---
+    st.subheader("📈 Model Interpretability (Explainable AI)")
+    tab_local, tab_global = st.tabs(["🔍 Individual Explanation (SHAP Waterfall)", "🌐 What Matters Most (Global Feature Importance)"])
     
-    shap_vals = explainer(input_df_scaled)
-    
-    plt.figure(figsize=(10, 5))
-    shap.plots.waterfall(shap_vals[0], max_display=10, show=False)
-    st.pyplot(plt.gcf())
-    plt.clf()
+    with tab_local:
+        st.write("Dekomposisi atribusi nilai Shapley per individu: Balok **merah (+)** mendorong kenaikan risiko, balok **biru (-)** meredam risiko calon debitur ini:")
+        shap_vals = explainer(input_df_scaled)
+        
+        plt.figure(figsize=(10, 5))
+        shap.plots.waterfall(shap_vals[0], max_display=10, show=False)
+        st.pyplot(plt.gcf())
+        plt.clf()
+
+    with tab_global:
+        st.write("Peringkat 10 faktor penentu paling dominan pada portofolio model XGBoost secara keseluruhan:")
+        importance_df = pd.DataFrame({
+            'Feature': model.feature_names_in_,
+            'Importance': model.feature_importances_
+        }).sort_values('Importance', ascending=True).tail(10)
+        
+        fig_global, ax_glob = plt.subplots(figsize=(10, 5))
+        ax_glob.barh(importance_df['Feature'], importance_df['Importance'], color='#2563eb')
+        ax_glob.set_xlabel('Feature Importance Weight (Gain)')
+        plt.tight_layout()
+        st.pyplot(fig_global)
+        plt.clf()
 
     # --- SECTION 5: DOWNLOAD REPORT BUTTON ---
     st.markdown("---")
     report_data = input_df.copy()
+    report_data.insert(0, 'Nama_Nasabah', customer_name if customer_name else "Calon Nasabah")
     report_data['Default_Probability'] = f"{prob_default * 100:.2f}%"
     report_data['Recommendation'] = "REJECTED" if prob_default >= 0.5 else "APPROVED"
     csv_report = report_data.to_csv(index=False).encode('utf-8')
     
+    file_clean_name = (customer_name if customer_name else "Nasabah").replace(" ", "_")
     st.download_button(
         label="📥 Download Assessment Report (CSV)",
         data=csv_report,
-        file_name=f"credit_assessment_report_age_{age}.csv",
+        file_name=f"Laporan_Kredit_{file_clean_name}.csv",
         mime="text/csv",
         help="Unduh berkas ringkasan evaluasi untuk arsip persetujuan kredit"
     )
