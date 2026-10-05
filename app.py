@@ -15,7 +15,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Kustomisasi CSS Antarmuka
+# Kustomisasi CSS Antarmuka Modern
 st.markdown("""
 <style>
     .metric-container {
@@ -93,11 +93,11 @@ def load_assets():
 model, scaler, explainer = load_assets()
 
 # -----------------------------------------------------------------------------
-# 2. DEFINISI PRESET PROFILES (DEMO CEPAT)
+# 2. DEFINISI PRESET PROFILES (DEMO CEPAT SIDANG)
 # -----------------------------------------------------------------------------
 presets = {
     "lancar": {
-        'customer_name': 'Budi Pekerti',
+        'customer_name': 'Budi Santoso',
         'limit_bal': 200000, 'sex': 2, 'education': 1, 'marriage': 2, 'age': 35,
         'pay_0': -1, 'pay_2': -1, 'pay_3': -1, 'pay_4': -1, 'pay_5': -1, 'pay_6': -1,
         'bill_amt1': 25000, 'bill_amt2': 22000, 'bill_amt3': 18000,
@@ -106,7 +106,7 @@ presets = {
         'pay_amt4': 15000, 'pay_amt5': 12000, 'pay_amt6': 8000
     },
     "macet": {
-        'customer_name': 'Haryono Simatupang',
+        'customer_name': 'Rian Hidayat',
         'limit_bal': 30000, 'sex': 1, 'education': 3, 'marriage': 1, 'age': 26,
         'pay_0': 2, 'pay_2': 2, 'pay_3': 1, 'pay_4': 0, 'pay_5': 0, 'pay_6': 0,
         'bill_amt1': 29500, 'bill_amt2': 29000, 'bill_amt3': 28000,
@@ -115,7 +115,7 @@ presets = {
         'pay_amt4': 1000, 'pay_amt5': 500, 'pay_amt6': 500
     },
     "borderline": {
-        'customer_name': 'Pranowo Subiani',
+        'customer_name': 'Siti Rahmawati',
         'limit_bal': 80000, 'sex': 1, 'education': 2, 'marriage': 2, 'age': 29,
         'pay_0': 1, 'pay_2': 0, 'pay_3': 0, 'pay_4': -1, 'pay_5': 0, 'pay_6': 0,
         'bill_amt1': 48000, 'bill_amt2': 42000, 'bill_amt3': 38000,
@@ -134,10 +134,10 @@ if 'limit_bal' not in st.session_state:
     apply_preset('lancar')
 
 # -----------------------------------------------------------------------------
-# 3. SIDEBAR: PRESET CONTROLS & FORM INPUT
+# 3. SIDEBAR: PRESET CONTROLS & FORM INPUT NASABAH
 # -----------------------------------------------------------------------------
 st.sidebar.markdown("### ⚡ Uji Coba Cepat (Preset Profiles)")
-st.sidebar.caption("Klik tombol untuk memuat sampel data otomatis, atau edit nilai form di bawah:")
+st.sidebar.caption("Pilih skenario instan, atau sesuaikan nilai form di bawah secara manual:")
 col_p1, col_p2, col_p3 = st.sidebar.columns(3)
 
 with col_p1:
@@ -153,7 +153,7 @@ with col_p3:
 st.sidebar.markdown("---")
 st.sidebar.header("📋 Borrower Information")
 
-# Input Nama Calon Nasabah (Metadata antarmuka & pelaporan)
+# Input Nama Calon Nasabah (Metadata UI & Laporan)
 customer_name = st.sidebar.text_input("Nama Lengkap Calon Nasabah", key='customer_name')
 
 limit_bal = st.sidebar.number_input("Batas Kredit (LIMIT_BAL in NT$)", min_value=10000, max_value=1000000, step=10000, key='limit_bal')
@@ -164,7 +164,7 @@ age = st.sidebar.slider("Usia", min_value=18, max_value=80, key='age')
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Riwayat Keterlambatan Bayar (6 Bulan)")
-pay_status_options = {-2: "Tidak ada tagihan", -1: "Tepat waktu (Paid duly)", 0: "Revolving credit", 1: "Telat 1 bulan", 2: "Telat 2 bulan", 3: "Telat 3+ bulan"}
+pay_status_options = {-2: "Tidak ada tagihan", -1: "Tepat waktu (Paid duly)", 0: "Revolving credit", 1: "Telat 1 bulan (30 hari)", 2: "Telat 2 bulan (60 hari)", 3: "Telat 3+ bulan (90+ hari)"}
 
 pay_0 = st.sidebar.selectbox("Sept 2005 (PAY_0)", options=list(pay_status_options.keys()), format_func=lambda x: f"{x} ({pay_status_options[x]})", key='pay_0')
 pay_2 = st.sidebar.selectbox("Agt 2005 (PAY_2)", options=list(pay_status_options.keys()), format_func=lambda x: f"{x} ({pay_status_options[x]})", key='pay_2')
@@ -194,7 +194,7 @@ pay_amt6 = st.sidebar.number_input("Bayar Apr 2005 (PAY_AMT6)", key='pay_amt6')
 btn_predict = st.sidebar.button("🔍 Assess Credit Risk", use_container_width=True)
 
 # -----------------------------------------------------------------------------
-# FUNGSI MEMBUAT RISK GAUGE METER (PLOTLY)
+# FUNGSI RISK GAUGE METER (PLOTLY)
 # -----------------------------------------------------------------------------
 def plot_risk_gauge(probability):
     prob_pct = probability * 100
@@ -232,7 +232,7 @@ st.markdown("**Decision Support System Berbasis Extreme Gradient Boosting (XGBoo
 st.caption("Pilih profil sampel pada bilah samping atau sesuaikan data secara manual, lalu klik tombol **Assess Credit Risk**.")
 
 if btn_predict:
-    # 23 Fitur Murni untuk Inferensi Model
+    # 23 Fitur Murni untuk Inferensi XGBoost
     feature_dict = {
         'LIMIT_BAL': limit_bal, 'SEX': sex, 'EDUCATION': education, 'MARRIAGE': marriage, 'AGE': age,
         'PAY_0': pay_0, 'PAY_2': pay_2, 'PAY_3': pay_3, 'PAY_4': pay_4, 'PAY_5': pay_5, 'PAY_6': pay_6,
@@ -244,20 +244,22 @@ if btn_predict:
     
     input_df = pd.DataFrame([feature_dict])
     
-    # Penskalaan Fitur Numerik menggunakan RobustScaler
+    # Penskalaan Numerik via RobustScaler
     num_cols = ['LIMIT_BAL'] + [f'BILL_AMT{i}' for i in range(1, 7)] + [f'PAY_AMT{i}' for i in range(1, 7)]
     input_df_scaled = input_df.copy()
     input_df_scaled[num_cols] = scaler.transform(input_df[num_cols])
     
-    # Prediksi Probabilitas
+    # Inferensi Prediksi Probabilitas
     prob_default = model.predict_proba(input_df_scaled)[0][1]
     
-    # Kalkulasi Metrik Finansial
+    # Kalkulasi Metrik Finansial Riil
     utilization_rate = max(0, min(100, int((bill_amt1 / max(1, limit_bal)) * 100)))
-    total_late_months = sum([1 for p in [pay_0, pay_2, pay_3, pay_4, pay_5, pay_6] if p > 0])
+    pay_history = [pay_0, pay_2, pay_3, pay_4, pay_5, pay_6]
+    total_late_periods = sum([1 for p in pay_history if p > 0]) # Frekuensi periode menunggak
+    max_delay_months = max([p for p in pay_history if p > 0] or [0]) # Keparahan tunggakan terlama
     payment_ratio = max(0, min(100, int((pay_amt1 / max(1, bill_amt1)) * 100))) if bill_amt1 > 0 else 100
     
-    active_name = customer_name if customer_name.strip() else "Calon Nasabah"
+    active_name = customer_name.strip() if customer_name.strip() else "Calon Nasabah"
     st.subheader(f"📊 Hasil Penilaian Kredit: {active_name}")
     
     # --- SECTION 1: BADGE STATUS & RISK GAUGE ---
@@ -281,7 +283,7 @@ if btn_predict:
         <div class="metric-container">
             {badge_html}
             <div class="prob-number" style="color: {prob_color};">{prob_default * 100:.1f}%</div>
-            <div style="color: #64748b; font-size: 0.95rem; font-weight: 500;">Estimated probability of default</div>
+            <div style="color: #64748b; font-size: 0.95rem; font-weight: 500;">Estimated probability of credit default</div>
             <div style="margin-top: 10px; font-weight: 600; font-size: 0.9rem; color: #334155;">{recom_text}</div>
         </div>
         """, unsafe_allow_html=True)
@@ -293,22 +295,22 @@ if btn_predict:
         if prob_default >= 0.5:
             st.markdown(f"""
             > **Evaluasi Posisi Risiko:**  
-            > Nasabah **{active_name}** diklasifikasikan ke dalam kategori **Tinggi (High Risk)** dengan estimasi probabilitas gagal bayar **{prob_default * 100:.1f}%**. Posisi risiko melampaui batas toleransi (50.0%). Hal ini dipicu oleh rasio pemakaian kredit yang mencapai **{utilization_rate}%** serta catatan keterlambatan pembayaran selama **{total_late_months} bulan**.
+            > Nasabah **{active_name}** diklasifikasikan ke dalam kategori **Tinggi (High Risk)** dengan estimasi probabilitas gagal bayar **{prob_default * 100:.1f}%**. Posisi risiko melampaui batas toleransi (50.0%). Hal ini dipicu oleh rasio pemakaian limit yang mencapai **{utilization_rate}%** serta catatan keterlambatan pembayaran pada **{total_late_periods} periode penagihan** (keterlambatan terlama mencapai status {max_delay_months} bulan).
             """)
         elif prob_default >= 0.35:
             st.markdown(f"""
             > **Evaluasi Posisi Risiko:**  
-            > Nasabah **{active_name}** berada pada zona **Waspada / Moderat (Borderline)** dengan probabilitas gagal bayar **{prob_default * 100:.1f}%**. Meskipun belum melampaui ambang batas kritis (50.0%), profil ini disarankan melalui pertimbangan komite kredit dengan penyesuaian plafon yang lebih konservatif.
+            > Nasabah **{active_name}** berada pada zona **Waspada / Moderat (Borderline)** dengan probabilitas gagal bayar **{prob_default * 100:.1f}%**. Meskipun belum melampaui ambang batas kritis (50.0%), profil ini disarankan melalui pertimbangan komite kredit dengan penyesuaian pagu kredit yang lebih konservatif.
             """)
         else:
             st.markdown(f"""
             > **Evaluasi Posisi Risiko:**  
-            > Nasabah **{active_name}** diklasifikasikan ke dalam kategori **Rendah (Low Risk)** dengan probabilitas gagal bayar hanya **{prob_default * 100:.1f}%** (jauh di bawah batas kritis 50.0%). Angka ini mencerminkan pemanfaatan limit yang terkendali (**{utilization_rate}%**) dan kedisiplinan mutasi pembayaran yang konsisten.
+            > Nasabah **{active_name}** diklasifikasikan ke dalam kategori **Rendah (Low Risk)** dengan probabilitas gagal bayar hanya **{prob_default * 100:.1f}%** (jauh di bawah ambang batas toleransi 50.0%). Angka ini mencerminkan penggunaan limit yang sehat (**{utilization_rate}%**) dan kedisiplinan pembayaran tagihan yang konsisten.
             """)
         
     st.markdown("---")
     
-    # --- SECTION 2: WHY THIS SCORE? (INSIGHTS) ---
+    # --- SECTION 2: WHY THIS SCORE? (EXPLANATION INSIGHTS) ---
     st.subheader("🔍 Why This Score?")
     
     # Analisis Credit Utilization
@@ -316,30 +318,30 @@ if btn_predict:
         st.markdown(f"""
         <div class="why-box-good">
             <b>🟢 Healthy credit utilization</b><br>
-            Hanya <b>{utilization_rate}%</b> dari plafon batas kredit yang terpakai — sinyal kendali likuiditas yang disiplin.
+            Hanya <b>{utilization_rate}%</b> dari plafon batas kredit yang terpakai — sinyal kendali utang yang disiplin.
         </div>
         """, unsafe_allow_html=True)
     else:
         st.markdown(f"""
         <div class="why-box-bad">
             <b>🔴 High credit utilization</b><br>
-            Pemakaian saldo mencapai <b>{utilization_rate}%</b> dari plafon kredit — rasio utang tinggi meningkatkan risiko likuiditas.
+            Pemakaian saldo mencapai <b>{utilization_rate}%</b> dari plafon kredit — rasio ketergantungan utang yang tinggi meningkatkan risiko gagal bayar.
         </div>
         """, unsafe_allow_html=True)
         
-    # Analisis Riwayat Keterlambatan
-    if total_late_months == 0:
+    # Analisis Riwayat Keterlambatan (Presisi: Frekuensi vs Keparahan)
+    if total_late_periods == 0:
         st.markdown("""
         <div class="why-box-good">
             <b>🟢 Clean payment history</b><br>
-            Tidak ada riwayat keterlambatan bayar yang tercatat selama 6 bulan terakhir — indikator kelayakan pembayaran terbaik.
+            Tidak ada riwayat keterlambatan bayar yang tercatat selama 6 bulan terakhir — indikator likuiditas yang sangat positif.
         </div>
         """, unsafe_allow_html=True)
     else:
         st.markdown(f"""
         <div class="why-box-bad">
             <b>🔴 Payment delay detected</b><br>
-            Tercatat penundaan pembayaran sebanyak <b>{total_late_months} bulan</b> pada 6 bulan terakhir — pendorong dominan naiknya risiko.
+            Tercatat keterlambatan pembayaran pada <b>{total_late_periods} dari 6 periode tagihan</b> dengan durasi tunggakan paling parah mencapai <b>{max_delay_months} bulan</b> — faktor pendorong utama naiknya risiko default.
         </div>
         """, unsafe_allow_html=True)
 
@@ -350,8 +352,8 @@ if btn_predict:
     kpi1, kpi2, kpi3, kpi4 = st.columns(4)
     kpi1.metric("Credit Utilization", f"{utilization_rate}%")
     kpi2.metric("Payment / Bill Ratio", f"{payment_ratio}%")
-    kpi3.metric("Total Late Months", f"{total_late_months} mos")
-    kpi4.metric("Age", f"{age} yrs")
+    kpi3.metric("Frekuensi Tunggakan", f"{total_late_periods} dari 6 bln", help="Jumlah periode bulan di mana nasabah pernah menunggak")
+    kpi4.metric("Tunggakan Terparah", f"{max_delay_months} bln" if max_delay_months > 0 else "0 bln", help="Tingkat keterlambatan paling lama yang pernah dialami")
 
     st.markdown("---")
 
@@ -360,7 +362,7 @@ if btn_predict:
     tab_local, tab_global = st.tabs(["🔍 Individual Explanation (SHAP Waterfall)", "🌐 What Matters Most (Global Feature Importance)"])
     
     with tab_local:
-        st.write("Dekomposisi atribusi nilai Shapley per individu: Balok **merah (+)** mendorong kenaikan risiko, balok **biru (-)** meredam risiko calon debitur ini:")
+        st.write("Dekomposisi atribusi nilai Shapley per individu: Balok **merah (+)** mendorong kenaikan risiko, balok **biru (-)** meredam risiko nasabah ini:")
         shap_vals = explainer(input_df_scaled)
         
         plt.figure(figsize=(10, 5))
@@ -368,7 +370,7 @@ if btn_predict:
         st.pyplot(plt.gcf())
         plt.clf()
 
-        # Ekstraksi Fitur Terkuat Secara Otomatis dari Nilai SHAP
+        # Ekstraksi Fitur Terkuat Secara Otomatis dari Array SHAP
         feature_names = input_df.columns
         shap_array = shap_vals[0].values
         
@@ -391,8 +393,8 @@ if btn_predict:
             'PAY_4': 'Status pembayaran bulan Juni',
             'PAY_5': 'Status pembayaran bulan Mei',
             'PAY_6': 'Status pembayaran bulan April',
-            'LIMIT_BAL': 'Besaran limit kredit',
-            'AGE': 'Usia nasabah',
+            'LIMIT_BAL': 'Besaran batas kredit (LIMIT_BAL)',
+            'AGE': 'Usia pemohon kredit',
             'BILL_AMT1': 'Nominal tagihan bulan September',
             'BILL_AMT2': 'Nominal tagihan bulan Agustus',
             'BILL_AMT3': 'Nominal tagihan bulan Juli',
@@ -432,7 +434,7 @@ if btn_predict:
         st.pyplot(fig_global)
         plt.clf()
         
-        st.caption("Peringkat di atas mencerminkan bobot *Gain* global yang dipelajari XGBoost: fitur di posisi teratas memberikan kontribusi pemisahan sampel paling signifikan dalam mitigasi risiko portofolio.")
+        st.caption("Peringkat di atas mencerminkan bobot *Gain* global yang dipelajari XGBoost: variabel di posisi teratas memberikan kontribusi pemisahan sampel paling signifikan dalam evaluasi risiko portofolio.")
 
     # --- SECTION 5: DOWNLOAD REPORT BUTTON ---
     st.markdown("---")
